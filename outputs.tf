@@ -17,3 +17,7 @@ output "eks_cluster_endpoint" {
 output "eks_cluster_nodegroup_id" {
   value = aws_eks_node_group.ms-node-group.id
 }
+
+output "eks_cluster_security_group_id" {
+  value = aws_security_group.ms-cluster.id
+}
