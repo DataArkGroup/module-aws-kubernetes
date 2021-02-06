@@ -12,7 +12,7 @@ locals {
 #  * EKS Cluster
 #
 
-resource "aws_iam_role" "ms-cluster" {
+resource "aws_iam_role" "ek8s-cluster-role" {
   name = local.cluster_name
 
   assume_role_policy = <<POLICY
@@ -31,12 +31,12 @@ resource "aws_iam_role" "ms-cluster" {
 POLICY
 }
 
-resource "aws_iam_role_policy_attachment" "ms-cluster-AmazonEKSClusterPolicy" {
+resource "aws_iam_role_policy_attachment" "ek8s-cluster-AmazonEKSClusterPolicy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = aws_iam_role.ms-cluster.name
+  role       = aws_iam_role.ek8s-cluster-role.name
 }
 
-resource "aws_security_group" "ms-cluster" {
+resource "aws_security_group" "ek8s-cluster-sg" {
   name        = local.cluster_name
   description = "Cluster communication with worker nodes"
   vpc_id      = var.vpc_id
@@ -59,21 +59,21 @@ resource "aws_security_group" "ms-cluster" {
   }
 
   tags = {
-    Name = "ms-up-running"
+    Name = "ek8s-cluster-sg"
   }
 }
 
-resource "aws_eks_cluster" "ms-up-running" {
+resource "aws_eks_cluster" "ek8s-cluster" {
   name     = local.cluster_name
-  role_arn = aws_iam_role.ms-cluster.arn
+  role_arn = aws_iam_role.ek8s-cluster-role.arn
 
   vpc_config {
-    security_group_ids = [aws_security_group.ms-cluster.id]
+    security_group_ids = [aws_security_group.ek8s-cluster-sg.id]
     subnet_ids         = var.cluster_subnet_ids
   }
 
   depends_on = [
-    aws_iam_role_policy_attachment.ms-cluster-AmazonEKSClusterPolicy
+    aws_iam_role_policy_attachment.ek8s-cluster-AmazonEKSClusterPolicy
   ]
 }
 
@@ -84,7 +84,7 @@ resource "aws_eks_cluster" "ms-up-running" {
 #  * EKS Node Group to launch worker nodes
 #
 
-resource "aws_iam_role" "ms-node" {
+resource "aws_iam_role" "ek8s-node" {
   name = "${local.cluster_name}.node"
 
   assume_role_policy = <<POLICY
@@ -103,25 +103,25 @@ resource "aws_iam_role" "ms-node" {
 POLICY
 }
 
-resource "aws_iam_role_policy_attachment" "ms-node-AmazonEKSWorkerNodePolicy" {
+resource "aws_iam_role_policy_attachment" "ek8s-node-AmazonEKSWorkerNodePolicy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.ms-node.name
+  role       = aws_iam_role.ek8s-node.name
 }
 
-resource "aws_iam_role_policy_attachment" "ms-node-AmazonEKS_CNI_Policy" {
+resource "aws_iam_role_policy_attachment" "ek8s-node-AmazonEKS_CNI_Policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.ms-node.name
+  role       = aws_iam_role.ek8s-node.name
 }
 
-resource "aws_iam_role_policy_attachment" "ms-node-AmazonEC2ContainerRegistryReadOnly" {
+resource "aws_iam_role_policy_attachment" "ek8s-node-AmazonEC2ContainerRegistryReadOnly" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = aws_iam_role.ms-node.name
+  role       = aws_iam_role.ek8s-node.name
 }
 
-resource "aws_eks_node_group" "ms-node-group" {
-  cluster_name    = aws_eks_cluster.ms-up-running.name
+resource "aws_eks_node_group" "ek8s-node-group" {
+  cluster_name    = aws_eks_cluster.ek8s-cluster.name
   node_group_name = "microservices"
-  node_role_arn   = aws_iam_role.ms-node.arn
+  node_role_arn   = aws_iam_role.ek8s-node.arn
   subnet_ids      = var.nodegroup_subnet_ids
 
   scaling_config {
@@ -134,9 +134,9 @@ resource "aws_eks_node_group" "ms-node-group" {
   instance_types = var.nodegroup_instance_types
 
   depends_on = [
-    aws_iam_role_policy_attachment.ms-node-AmazonEKSWorkerNodePolicy,
-    aws_iam_role_policy_attachment.ms-node-AmazonEKS_CNI_Policy,
-    aws_iam_role_policy_attachment.ms-node-AmazonEC2ContainerRegistryReadOnly,
+    aws_iam_role_policy_attachment.ek8s-node-AmazonEKSWorkerNodePolicy,
+    aws_iam_role_policy_attachment.ek8s-node-AmazonEKS_CNI_Policy,
+    aws_iam_role_policy_attachment.ek8s-node-AmazonEC2ContainerRegistryReadOnly,
   ]
 }
 
@@ -146,19 +146,19 @@ resource "local_file" "kubeconfig" {
 apiVersion: v1
 clusters:
 - cluster:
-    certificate-authority-data: ${aws_eks_cluster.ms-up-running.certificate_authority.0.data}
-    server: ${aws_eks_cluster.ms-up-running.endpoint}
-  name: ${aws_eks_cluster.ms-up-running.arn}
+    certificate-authority-data: ${aws_eks_cluster.ek8s-cluster.certificate_authority.0.data}
+    server: ${aws_eks_cluster.ek8s-cluster.endpoint}
+  name: ${aws_eks_cluster.ek8s-cluster.arn}
 contexts:
 - context:
-    cluster: ${aws_eks_cluster.ms-up-running.arn}
-    user: ${aws_eks_cluster.ms-up-running.arn}
-  name: ${aws_eks_cluster.ms-up-running.arn}
-current-context: ${aws_eks_cluster.ms-up-running.arn}
+    cluster: ${aws_eks_cluster.ek8s-cluster.arn}
+    user: ${aws_eks_cluster.ek8s-cluster.arn}
+  name: ${aws_eks_cluster.ek8s-cluster.arn}
+current-context: ${aws_eks_cluster.ek8s-cluster.arn}
 kind: Config
 preferences: {}
 users:
-- name: ${aws_eks_cluster.ms-up-running.arn}
+- name: ${aws_eks_cluster.ek8s-cluster.arn}
   user:
     exec:
       apiVersion: client.authentication.k8s.io/v1alpha1
@@ -166,203 +166,7 @@ users:
       args:
         - "token"
         - "-i"
-        - "${aws_eks_cluster.ms-up-running.name}"
+        - "${aws_eks_cluster.ek8s-cluster.name}"
     KUBECONFIG
   filename = "kubeconfig"
 }
-/*
-#  Use data to ensure that the cluster is up before we start using it
-data "aws_eks_cluster" "msur" {
-  name = aws_eks_cluster.ms-up-running.id
-}
-
-# Use kubernetes provider to work with the kubernetes cluster API
-provider "kubernetes" {
-  load_config_file       = false
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.msur.certificate_authority.0.data)
-  host                   = data.aws_eks_cluster.msur.endpoint
-  exec {
-    api_version = "client.authentication.k8s.io/v1alpha1"
-    command     = "aws-iam-authenticator"
-    args        = ["token", "-i", "${data.aws_eks_cluster.msur.name}"]
-  }
-}
-
-# Create a namespace for microservice pods 
-resource "kubernetes_namespace" "ms-namespace" {
-  metadata {
-    name = var.ms_namespace
-  }
-}
-*/
-/*
-
-
-
-
-
-
-
-
-
-provider "aws" {
-  region = var.aws_region
-}
-
-# EKS Cluster access management
-
-locals {
-  cluster_name = "${var.cluster_name}-${var.env_name}"
-}
-
-resource "aws_iam_role" "ms-cluster" {
-  name = local.cluster_name
-
-  assume_role_policy = <<POLICY
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "eks.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ] 
-}
-POLICY
-}
-
-resource "aws_iam_role_policy_attachment" "ms-cluster-AmazonEKSClusterPolicy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = aws_iam_role.ms-cluster.name
-}
-
-# Network security policy for the cluster
-
-resource "aws_security_group" "ms-cluster" {
-  name   = local.cluster_name
-  vpc_id = var.vpc_id
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "ms-up-running"
-  }
-}
-
-# EKS Cluster
-
-resource "aws_eks_cluster" "ms-up-running" {
-  name     = local.cluster_name
-  role_arn = aws_iam_role.ms-cluster.arn
-
-  vpc_config {
-    security_group_ids = [aws_security_group.ms-cluster.id]
-    subnet_ids         = var.cluster_subnet_ids
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.ms-cluster-AmazonEKSClusterPolicy
-  ]
-}
-
-# Node role
-
-resource "aws_iam_role" "ms-node" {
-  name = "${local.cluster_name}.node"
-
-  assume_role_policy = <<POLICY
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-POLICY
-}
-
-# Node Policy
-resource "aws_iam_role_policy_attachment" "ms-node-AmazonEKSWorkerNodePolicy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.ms-node.name
-}
-
-resource "aws_iam_role_policy_attachment" "ms-node-AmazonEKS_CNI_Policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.ms-node.name
-}
-
-resource "aws_iam_role_policy_attachment" "ms-node-AmazonEC2ContainerRegistryReadOnly" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = aws_iam_role.ms-node.name
-}
-
-resource "aws_eks_node_group" "ms-node-group" {
-  cluster_name    = aws_eks_cluster.ms-up-running.name
-  node_group_name = "microservices"
-  node_role_arn   = aws_iam_role.ms-node.arn
-  subnet_ids      = var.nodegroup_subnet_ids
-
-  scaling_config {
-    desired_size = var.nodegroup_desired_size
-    max_size     = var.nodegroup_max_size
-    min_size     = var.nodegroup_min_size
-  }
-
-  disk_size      = var.nodegroup_disk_size
-  instance_types = var.nodegroup_instance_types
-
-  depends_on = [
-    aws_iam_role_policy_attachment.ms-node-AmazonEKSWorkerNodePolicy,
-    aws_iam_role_policy_attachment.ms-node-AmazonEKS_CNI_Policy,
-    aws_iam_role_policy_attachment.ms-node-AmazonEC2ContainerRegistryReadOnly
-  ]
-}
-
-# Create kubeconfig file based on the cluster that has been created
-
-resource "local_file" "kubeconfig" {
-  content = <<KUBECONFIG_END
-apiVersion: v1
-clusters:
-- cluster:
-    "certificate-authority-data: >
-    ${aws_eks_cluster.ms-up-running.certificate_authority.0.data}"
-    server: ${aws_eks_cluster.ms-up-running.arn}
-contexts:
-- context:
-    cluster: ${aws_eks_cluster.ms-up-running.arn}
-    user: ${aws_eks_cluster.ms-up-running.arn}
-  name: ${aws_eks_cluster.ms-up-running.arn}
-current-context: ${aws_eks_cluster.ms-up-running.arn}
-kind: Config
-preferences: {}
-users:
-- name: ${aws_eks_cluster.ms-up-running.arn}
-  user:
-    exec:
-        apiVersion: client.authentication.k8s.io/v1alpha1
-        command: aws-iam-authenticator
-        args:
-            - "token"
-            - "-i"
-            - "${aws_eks_cluster.ms-up-running.name}"
-
-    KUBECONFIG_END
-
-  filename = "kubeconfig"
-}
-*/
