@@ -13,7 +13,7 @@ variable "cluster_name" {
 
 variable "ms_namespace" {
   type    = string
-  default = "inception""
+  default = "inception"
 }
 
 variable "vpc_id" {
